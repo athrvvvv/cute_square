@@ -21,10 +21,11 @@ def download():
 
     unique_id = str(uuid.uuid4())
     output_path = os.path.join(DOWNLOAD_DIR, f"{unique_id}.mp3")
-
+    cookies_path = "/etc/secrets/cookies.txt"
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': output_path.replace(".mp3", ".%(ext)s"),
+        'cookiefile': cookies_path,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
