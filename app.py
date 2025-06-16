@@ -2,6 +2,7 @@ from flask import Flask, request, send_file
 import yt_dlp
 import os
 import uuid
+import shutil
 
 app = Flask(__name__)
 DOWNLOAD_DIR = "downloads"
@@ -21,11 +22,13 @@ def download():
 
     unique_id = str(uuid.uuid4())
     output_path = os.path.join(DOWNLOAD_DIR, f"{unique_id}.mp3")
-    cookies_path = "/etc/secrets/cookies.txt"
+    cookies_src = "/etc/secrets/cookies.txt"
+    cookies_tmp = "/tmp/cookies.txt"
+    shutil.copyfile(cookies_src, cookies_tmp)
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': output_path.replace(".mp3", ".%(ext)s"),
-        'cookiefile': cookies_path,
+        'cookiefile': cookies_tmp,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
