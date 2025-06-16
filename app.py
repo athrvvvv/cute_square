@@ -1,8 +1,7 @@
-from flask import Flask, request, send_file
-import yt_dlp
+from flask import Flask, request, send_file, jsonify
+import subprocess
 import os
 import uuid
-import shutil
 
 app = Flask(__name__)
 DOWNLOAD_DIR = "downloads"
@@ -10,47 +9,40 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 @app.route("/")
 def home():
-    return {"status": "API working!"}
+    return {"status": "API running!"}
 
 @app.route("/download", methods=["POST"])
-def download():
+def download_video():
     data = request.get_json()
     video_url = data.get("url")
-
     if not video_url:
-        return {"error": "No URL provided"}, 400
+        return jsonify({"error": "No URL provided"}), 400
 
-    unique_id = str(uuid.uuid4())
-    output_path = os.path.join(DOWNLOAD_DIR, f"{unique_id}.mp3")
-    cookies_src = "/etc/secrets/cookies.txt"
-    cookies_tmp = "/tmp/cookies.txt"
-    shutil.copyfile(cookies_src, cookies_tmp)
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': output_path.replace(".mp3", ".%(ext)s"),
-        'cookiefile': cookies_tmp,
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                          'AppleWebKit/537.36 (KHTML, like Gecko) '
-                          'Chrome/114.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Referer': 'https://www.youtube.com/',
-        }
-    }
+    # Unique filename prefix
+    file_id = str(uuid.uuid4())
+    output_template = os.path.join(DOWNLOAD_DIR, f"{file_id}.%(ext)s")
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
-        return send_file(output_path, as_attachment=True)
-    except Exception as e:
-        return {"error": str(e)}, 500
-        
-# ⬇️ THIS is what was missing
+        # Run yt-dlp as a subprocess to download best mp4 video
+        command = [
+            "yt-dlp",
+            "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "-o", output_template,
+            video_url,
+        ]
+        subprocess.run(command, check=True)
+
+        # Find the downloaded file
+        files = [f for f in os.listdir(DOWNLOAD_DIR) if f.startswith(file_id)]
+        if not files:
+            return jsonify({"error": "Download failed"}), 500
+
+        filepath = os.path.join(DOWNLOAD_DIR, files[0])
+        return send_file(filepath, as_attachment=True)
+
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": f"Download error: {e}"}), 500
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True)
